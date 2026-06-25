@@ -48,6 +48,15 @@ query GetSentPosts($orgId: OrganizationId!, $channelId: ChannelId!, $after: Stri
         id
         text
         sentAt
+        externalLink
+        metadata {
+          ... on LinkedInPostMetadata {
+            firstComment
+            linkAttachment {
+              url
+            }
+          }
+        }
         metrics {
           type
           value
@@ -208,6 +217,7 @@ def write_csv(posts: list[dict], output_path: str) -> None:
             "sent_at",
             "text",
             "first_comment",
+            "post_link",
             "reactions",
             "comments",
             "impressions",
@@ -221,12 +231,16 @@ def write_csv(posts: list[dict], output_path: str) -> None:
 
         for post in posts:
             metrics = extract_metrics(post.get("metrics", []))
+            metadata = post.get("metadata") or {}
+            first_comment = metadata.get("firstComment") or ""
+            post_link = post.get("externalLink") or ""
 
             row = {
                 "post_id": post.get("id", ""),
                 "sent_at": post.get("sentAt", ""),
                 "text": post.get("text", ""),
-                "first_comment": "",
+                "first_comment": first_comment,
+                "post_link": post_link,
                 "reactions": metrics["reactions"],
                 "comments": metrics["comments"],
                 "impressions": metrics["impressions"],
