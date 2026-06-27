@@ -14,17 +14,18 @@ uv sync
 
 ### 2. Create `.env` file
 
-Copy your Buffer API key from the template project (`/Users/alfonsosaeravila/Documents/linkedin_posts`):
-
-```bash
-BUFFER_API_KEY=your_buffer_api_key_here
-```
-
-Create a `.env` file in this directory with:
+Create a `.env` file in this directory with three required keys:
 
 ```
-BUFFER_API_KEY=<your-key>
+BUFFER_API_KEY=<your-buffer-api-key>
+BUFFER_CHANNEL_ID=<your-linkedin-channel-id>
+BUFFER_ORG_ID=<your-org-id>
 ```
+
+**Where to find each value:**
+- **BUFFER_API_KEY**: Buffer dashboard → Settings → API
+- **BUFFER_CHANNEL_ID**: Buffer dashboard → Settings → Channels → LinkedIn (in the channel URL)
+- **BUFFER_ORG_ID**: Buffer dashboard → Settings → Organization
 
 ## Usage
 
@@ -35,7 +36,7 @@ uv run python src/post_downloader.py
 ```
 
 This will:
-1. Discover your organization ID and LinkedIn channel from Buffer
+1. Read your organization ID and LinkedIn channel from `.env`
 2. Fetch all published posts (paginated, 50 per page)
 3. Extract metrics: reactions, comments, impressions, reach, engagement rate
 4. Write results to `output/linkedin_posts.csv`
@@ -55,7 +56,8 @@ The CSV contains these columns:
 | `post_id` | Buffer post ID |
 | `sent_at` | ISO 8601 timestamp when post was published |
 | `text` | Full post text |
-| `first_comment` | First comment (links block) attached to post |
+| `first_comment` | Custom first comment attached to the post (when present) |
+| `post_link` | Native LinkedIn post URL (e.g., `linkedin.com/feed/update/urn:li:ugcPost:...`) |
 | `reactions` | Number of LinkedIn reactions (likes) |
 | `comments` | Number of comments |
 | `impressions` | Number of impressions |
@@ -67,11 +69,12 @@ The CSV is encoded with UTF-8 BOM to safely handle emojis and special characters
 
 ## Notes
 
-- **LinkedIn post URL**: Buffer's API does not expose the native LinkedIn post URL (e.g., `linkedin.com/feed/update/...`). To get the URL, you would need to:
-  - Use LinkedIn's own Creator Post Analytics API (requires LinkedIn API access)
-  - Manually construct URLs using the `post_id` if there's a known pattern
-  - Fetch directly from LinkedIn's API (separate OAuth setup required)
+- **LinkedIn post URL**: The `post_link` column contains the native LinkedIn post URL via Buffer's `externalLink` field. This is always populated for published posts.
 
-- **Metrics availability**: Metrics are only available for published posts. The `metrics_updated_at` field tells you when Buffer last synced data from LinkedIn's backend.
+- **First comment vs. external link attachment**: 
+  - `first_comment` = custom comment text you optionally set when scheduling the post
+  - External links attached to posts (e.g., paper URLs, GitHub repos) are in Buffer's `linkAttachment` field but are **not** included in the current CSV (they're rare; add if needed via BUFFER_API_NOTES.md)
+
+- **Metrics availability**: Metrics are only available for published posts. The `metrics_updated_at` field tells you when Buffer last synced data from LinkedIn's backend. Some metrics may be `null` if insufficient access.
 
 - **Pagination**: The script handles automatic pagination — it will fetch all 50 posts per page until all posts are retrieved.

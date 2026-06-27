@@ -7,8 +7,8 @@ The current script fetches:
 - **post_id**: Buffer's internal post ID
 - **sent_at**: ISO 8601 timestamp when the post was published
 - **text**: Full post text/content
-- **first_comment**: Custom first comment attached to the post (from `LinkedInPostMetadata.firstComment`)
-- **post_link**: External link URL attached to the post (from `LinkedInPostMetadata.linkAttachment.url`)
+- **first_comment**: Custom first comment attached to the post (from `LinkedInPostMetadata.firstComment`, optional)
+- **post_link**: Native LinkedIn post URL (from `Post.externalLink`, always present for sent posts)
 - **metrics_updated_at**: When metrics were last synced from LinkedIn
 
 ### Metrics (Normalized across all platforms)
@@ -30,9 +30,9 @@ The `metadata` field on Post is a GraphQL union type. To access LinkedIn-specifi
 ```graphql
 metadata {
   ... on LinkedInPostMetadata {
-    firstComment          # Custom first comment text (String)
-    linkAttachment {      # External link attached to the post
-      url                 # Link URL
+    firstComment          # Custom first comment text (String, optional)
+    linkAttachment {      # External link you optionally attached when scheduling
+      url                 # Link URL (e.g., paper, GitHub, tool)
       expandedUrl         # Expanded version of URL (String)
       text                # Link text (String)
       title               # Link title (String)
@@ -43,18 +43,18 @@ metadata {
 }
 ```
 
-**Note**: `linkAttachment.url` is an *external* link attached to the post (e.g., paper URL, GitHub repo), NOT the native LinkedIn post URL. These are available on ~4% of posts (19 out of 471 in the current dataset).
+**What's included in the CSV:**
+- `firstComment` from `LinkedInPostMetadata` → CSV `first_comment` column
+- `externalLink` from top-level Post → CSV `post_link` column (the native LinkedIn post URL)
+- `linkAttachment` is NOT included in current CSV (it's an external URL you optionally attach, different from the LinkedIn post URL)
 
 ## What's NOT Available from Buffer
 
-- **Native LinkedIn Post URL**: Buffer does NOT expose the LinkedIn post URL (e.g., `linkedin.com/feed/update/urn:li:activity:...`)
-  - The `linkAttachment.url` field is for *external* links attached to posts, not the LinkedIn post itself
-  - Workaround: Use LinkedIn's own API (requires separate OAuth)
-  - Alternative: Manually construct if you know the LinkedIn `serviceUpdateId` / post URN
+- **LinkedIn Post ID/URN**: The `LinkedInPostMetadata` type does not expose the LinkedIn `urn:li:ugcPost:...` ID format directly
+  - The `externalLink` field contains the full LinkedIn post URL, but not the URN/ID separately
 
-- **LinkedIn Native Post ID/URN**: The `LinkedInPostMetadata` type does not include the LinkedIn post's native URN or ID
-
-- **serviceUpdateId**: Not exposed by Buffer's GraphQL API (needed to construct LinkedIn post URLs)
+- **External link attachments in CSV**: Posts can have optional external links attached (via `linkAttachment`), but these are not included in the current CSV
+  - Would require extending `QUERY_SENT_POSTS` to fetch `linkAttachment { url title ... }` and `write_csv()` to export them
 
 ## PostMetadata Union Types
 
@@ -163,18 +163,31 @@ The `QUERY_SENT_POSTS` GraphQL query supports `startDate` and `endDate` filters.
    }
    ```
 
-### Get LinkedIn post URLs (requires LinkedIn API)
-Buffer does not provide this. To get native LinkedIn URLs, you'd need:
+### Add external link attachments to CSV
+If you want to include the optional external links users attach when scheduling posts:
 
-1. **LinkedIn Creator Post Analytics API** (2025+):
-   - Requires LinkedIn OAuth with `r_member_social` scope
-   - Partner approval needed for third-party apps
-   - Returns analytics + post URNs
-   - Separate integration needed (not covered by Buffer)
+1. Extend `QUERY_SENT_POSTS` in `src/post_downloader.py`:
+   ```graphql
+   metadata {
+     ... on LinkedInPostMetadata {
+       firstComment
+       linkAttachment {
+         url
+         title
+         expandedUrl
+       }
+     }
+   }
+   ```
 
-2. **Buffer + LinkedIn integration**:
-   - Use LinkedIn's Graph API directly after getting the post's `serviceUpdateId` from elsewhere
-   - Construct URL manually if you know the pattern
+2. Extract in `write_csv()`:
+   ```python
+   metadata = post.get("metadata") or {}
+   link_att = metadata.get("linkAttachment") or {}
+   external_url = link_att.get("url") or ""
+   ```
+
+3. Add to CSV fieldnames and row dict
 
 ## Buffer GraphQL Pagination Details
 
