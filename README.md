@@ -47,6 +47,27 @@ This will:
 uv run python src/post_downloader.py --output my_posts.csv
 ```
 
+### Filter posts by date
+
+Use `--since` to only include posts sent on or after a given date (`YYYY-MM-DD`, UTC). Since posts come back newest-first, the script also stops paginating as soon as it passes the cutoff, so this is faster than downloading full history.
+
+```bash
+uv run python src/post_downloader.py --since 2026-01-01
+```
+
+### Combine options
+
+```bash
+uv run python src/post_downloader.py --since 2026-01-01 --output output/2026_posts.csv
+```
+
+## Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--output` | Output CSV file path | `output/linkedin_posts.csv` |
+| `--since` | Only include posts sent on or after this date (`YYYY-MM-DD`, UTC) | none (all posts) |
+
 ## Output Format
 
 The CSV contains these columns:
@@ -77,4 +98,4 @@ The CSV is encoded with UTF-8 BOM to safely handle emojis and special characters
 
 - **Metrics availability**: Metrics are only available for published posts. The `metrics_updated_at` field tells you when Buffer last synced data from LinkedIn's backend. Some metrics may be `null` if insufficient access.
 
-- **Pagination**: The script handles automatic pagination — it will fetch all 50 posts per page until all posts are retrieved.
+- **Pagination**: The script handles automatic pagination — it will fetch all 50 posts per page until all posts are retrieved (or until `--since` cuts it off early).

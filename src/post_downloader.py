@@ -7,7 +7,7 @@ import json
 import argparse
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 import requests
 
@@ -139,8 +139,18 @@ def get_linkedin_channel_id() -> str:
         raise
 
 
-def fetch_all_sent_posts(org_id: str, channel_id: str) -> list[dict]:
-    """Fetch all sent LinkedIn posts using cursor-based pagination."""
+def parse_sent_at(sent_at: str) -> datetime:
+    """Parse a Buffer sentAt timestamp (ISO 8601 with Z suffix) into an aware datetime."""
+    return datetime.fromisoformat(sent_at.replace("Z", "+00:00"))
+
+
+def fetch_all_sent_posts(org_id: str, channel_id: str, since: datetime | None = None) -> list[dict]:
+    """Fetch sent LinkedIn posts using cursor-based pagination.
+
+    Posts are returned newest-first (sorted by dueAt desc). If `since` is given,
+    pagination stops as soon as a post older than `since` is encountered, since
+    everything after it would be older too.
+    """
     all_posts = []
     after_cursor = None
     page_count = 0
@@ -159,12 +169,22 @@ def fetch_all_sent_posts(org_id: str, channel_id: str) -> list[dict]:
         posts_response = data.get("posts", {})
         edges = posts_response.get("edges", [])
 
+        reached_cutoff = False
         for edge in edges:
-            all_posts.append(edge.get("node", {}))
+            node = edge.get("node", {})
+            if since is not None and node.get("sentAt"):
+                if parse_sent_at(node["sentAt"]) < since:
+                    reached_cutoff = True
+                    break
+            all_posts.append(node)
 
         page_info = posts_response.get("pageInfo", {})
         has_next = page_info.get("hasNextPage", False)
         logger.info(f"Page {page_count}: {len(edges)} posts, hasNextPage={has_next}")
+
+        if reached_cutoff:
+            logger.info(f"Reached posts older than {since.isoformat()}, stopping pagination")
+            break
 
         if not has_next:
             break
@@ -264,8 +284,21 @@ def main():
         default="output/linkedin_posts.csv",
         help="Output CSV file path (default: output/linkedin_posts.csv)",
     )
+    parser.add_argument(
+        "--since",
+        type=str,
+        default=None,
+        help="Only include posts sent on or after this date (YYYY-MM-DD, UTC)",
+    )
 
     args = parser.parse_args()
+
+    since = None
+    if args.since:
+        try:
+            since = datetime.strptime(args.since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise SystemExit(f"Invalid --since date: {args.since!r}. Expected format YYYY-MM-DD.")
 
     try:
         channel_id = get_linkedin_channel_id()
@@ -275,7 +308,7 @@ def main():
                 "BUFFER_ORG_ID not set in .env. "
                 "Find it in your Buffer dashboard under Settings → Organization"
             )
-        posts = fetch_all_sent_posts(org_id, channel_id)
+        posts = fetch_all_sent_posts(org_id, channel_id, since=since)
         write_csv(posts, args.output)
         logger.info("Done!")
 
