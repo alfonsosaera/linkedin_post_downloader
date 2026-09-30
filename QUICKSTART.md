@@ -1,20 +1,12 @@
 # Quick Start
 
-## 1. Copy your Buffer API Key
+## 1. Set up your Buffer API Key
 
-Your Buffer API key is already set up in the template project. To reuse it:
+Create a `.env` file in this directory with your Buffer API key:
 
 ```bash
-# Copy the .env from the template project
-cp /Users/alfonsosaeravila/Documents/linkedin_posts/.env .env
+BUFFER_API_KEY=<your-buffer-api-key>
 ```
-
-This copies your `BUFFER_API_KEY` to the new project.
-
-**Alternatively**, if you prefer to manage it separately:
-1. Open `/Users/alfonsosaeravila/Documents/linkedin_posts/.env` in an editor
-2. Copy the `BUFFER_API_KEY=...` line
-3. Create `.env` in this directory and paste it
 
 **Note — If Buffer API permissions prevent reading channels**: Add your LinkedIn channel ID manually:
 1. Find it in your Buffer dashboard: **Settings → Channels → LinkedIn** (note the channel ID)
